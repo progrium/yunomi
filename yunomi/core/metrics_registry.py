@@ -1,5 +1,5 @@
 from time import time
-from functools import wraps
+import functools
 
 from yunomi.core.counter import Counter
 from yunomi.core.histogram import Histogram
@@ -169,84 +169,80 @@ meter = _global_registry.meter
 timer = _global_registry.timer
 dump_metrics = _global_registry.dump_metrics
 
-def count_calls(fn):
+class _decorator(object):
+    """ 
+    helper for making decorators with arguments.
+    based on: http://stackoverflow.com/questions/10610824/python-shortcut-for-writing-decorators-which-accept-arguments
+    """
+    def __call__(self, fn):
+        self.fn = fn
+        return functools.wraps(fn)(lambda *a, **kw: self.wrap(*a, **kw))
+
+    def wrap(self, *args, **kwrags):
+        raise NotImplemented("Subclasses of _decorator must implement 'wrap'")
+
+class count_calls(_decorator):
     """
     Decorator to track the number of times a function is called.
-
-    @param fn: the function to be decorated
-    @type fn: C{func}
-
-    @return: the decorated function
-    @rtype: C{func}
     """
-    @wraps(fn)
-    def wrapper(*args):
-        counter("%s_calls" % fn.__name__).inc()
+    def __init__(self, name=None):
+        self.name = name
+
+    def wrap(self, *args, **kwargs):
+        name = self.name or "%s_calls" % self.fn.__name__
+        counter(name).inc()
         try:
-            return fn(*args)
+            return self.fn(*args)
         except:
             raise
-    return wrapper
 
-def meter_calls(fn):
+class meter_calls(_decorator):
     """
     Decorator to the rate at which a function is called.
-
-    @param fn: the function to be decorated
-    @type fn: C{func}
-
-    @return: the decorated function
-    @rtype: C{func}
     """
-    @wraps(fn)
-    def wrapper(*args):
-        meter("%s_calls" % fn.__name__).mark()
+    def __init__(self, name=None):
+        self.name = name
+
+    def wrap(self, *args, **kwargs):
+        name = self.name or "%s_calls" % self.fn.__name__
+        meter(name).mark()
         try:
-            return fn(*args)
+            return self.fn(*args)
         except:
             raise
-    return wrapper
 
-def hist_calls(fn):
+class hist_calls(_decorator):
     """
     Decorator to check the distribution of return values of a function.
-
-    @param fn: the function to be decorated
-    @type fn: C{func}
-
-    @return: the decorated function
-    @rtype: C{func}
     """
-    @wraps(fn)
-    def wrapper(*args):
-        _histogram = histogram("%s_calls" % fn.__name__)
+    def __init__(self, name=None):
+        self.name = name
+
+    def wrap(self, *args, **kwargs):
+        name = self.name or "%s_calls" % self.fn.__name__
+        _histogram = histogram(name)
         try:
-            rtn = fn(*args)
+            rtn = self.fn(*args)
             if type(rtn) in (int, float):
                 _histogram.update(rtn)
             return rtn
         except:
             raise
-    return wrapper
 
-def time_calls(fn):
+class time_calls(_decorator):
     """
     Decorator to time the execution of the function.
-
-    @param fn: the function to be decorated
-    @type fn: C{func}
-
-    @return: the decorated function
-    @rtype: C{func}
     """
-    @wraps(fn)
-    def wrapper(*args):
-        _timer = timer("%s_calls" % fn.__name__)
+    def __init__(self, name=None):
+        self.name = name
+
+    def wrap(self, *args, **kwargs):
+        name = self.name or "%s_calls" % self.fn.__name__
+        _timer = timer(name)
         start = time()
         try:
-            return fn(*args)
+            return self.fn(*args)
         except:
             raise
         finally:
             _timer.update(time() - start)
-    return wrapper
